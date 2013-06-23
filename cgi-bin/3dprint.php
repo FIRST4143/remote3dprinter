@@ -1,4 +1,3 @@
-
 <html>
 <head>
 <meta http-equiv="refresh" content="30" >
@@ -6,21 +5,13 @@
 <body>
 
 <?php
-if (!file_exists("/var/www/status/pid.txt"))
+if (isset($_POST['cancel']))
 {
-    echo ' <form action="' . htmlentities($_SERVER['PHP_SELF']) . '" method="post"
-    enctype="multipart/form-data">
-    <label for="file">Filename:</label>
-    <input type="file" name="file" id="file"><br>
-    <input type="submit" name="submit" value="Submit">
-    </form> ';
+    exec("nohup /usr/lib/cgi-bin/3dprintcancel.sh " . $_POST['cancel'] . " & echo $!", $op);
+    #echo "PID " . ((int)$op[0]);
+    sleep(1);
 }
-else
-{
-    echo ' Printer is busy <br>';
-}
-
-if (isset($_POST['submit']))
+else if (isset($_POST['submit']))
 {
     if ($_FILES["file"]["error"] > 0)
     {
@@ -39,7 +30,7 @@ if (isset($_POST['submit']))
         echo "Move to: " . $upload_name . "<br>";
         if (move_uploaded_file($tmp_name, $upload_name)) {
             echo "move successful <br>";
-            exec("nohup /usr/lib/cgi-bin/3dprint.sh " . $upload_name . " 1>/var/www/status/clientoutput.txt 2>&1 & echo $!", $op);
+            exec("nohup /usr/lib/cgi-bin/3dprint.sh " . $upload_name . " & echo $!", $op);
             echo "PID " . ((int)$op[0]);
             sleep(1);
         }
@@ -49,12 +40,62 @@ if (isset($_POST['submit']))
         }
     }
 }
-?>
+exec("wget http://192.168.1.12:8000/image/jpeg.cgi -O /var/www/upload/cam.jpg > /dev/null 2>&1 &");
 
-output log:<br>
-<pre>
-<?php include("/var/www/status/clientoutput.txt"); ?>
-</pre>
+$json = exec("/usr/lib/cgi-bin/3dstatus.sh");
+#var_dump(json_decode($json, true));
+$obj = json_decode($json);
+if($obj != NULL)
+{
+    $count = count($obj, 1) - 1;
+    $id = $obj[$count]->{'id'};
+    $state = $obj[$count]->{'state'};
+    $jobname = $obj[$count]->{'name'};
+    $progressname = $obj[$count]->{'progress'}->{'name'};
+    $progressnum = $obj[$count]->{'progress'}->{'progress'};
+
+}
+else
+{
+    $id = ''; $state = ''; $progressname = ''; $progressnum = '';
+    $jobname = '';
+}
+
+if (!file_exists("/var/www/status/pid.txt"))
+{
+    echo "Printer is not busy. Select file and print.<br>";
+    echo ' <form action="' . htmlentities($_SERVER['PHP_SELF']) . '" method="post"
+    enctype="multipart/form-data">
+    <label for="file">Filename:</label>
+    <input type="file" name="file" id="file"><br>
+    <input type="submit" name="submit" value="Print">
+    </form> ';
+}
+else
+{
+    echo ' Printer is busy <br>';
+    echo ' <form action="' . htmlentities($_SERVER['PHP_SELF']) . '" method="post">
+        <input type="hidden" name="cancel" value="' . $id . '">
+        <input type="submit" value="Cancel Print"> </form> <br>';
+}
+echo "job id: " . $id . "<br>";
+echo "job name: " . $jobname . "<br>";
+echo "state: " . $state . "<br>";
+echo "phase: " . $progressname . "<br>";
+echo "progress: " . $progressnum . "<br>";
+?>
+<br>
+<img src="/upload/cam.jpg" alt="webcam"><br>
+
+<?php 
+if (file_exists("/var/www/status/pid.txt")) 
+{
+    echo "output log:<br>";
+    echo "<pre>";
+    include("/var/www/status/clientoutput.txt"); 
+    echo "</pre>";
+}
+?>
 
 </body>
 </html>
